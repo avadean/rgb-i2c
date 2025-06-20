@@ -23,7 +23,9 @@ def get_displays(bus, layout=None, force=False):
             assert all(isinstance(i, int) for i in layout)
 
     # Let's first work out how many displays we have by collecting the addresses.
+    print("Scanning for devices on I2C bus")
     addresses = get_addresses(bus)
+    print("Found devices with addresses: ",addresses)
 
     # If a layout was supplied, ensure we have at least enough devices.
     if layout is not None:
