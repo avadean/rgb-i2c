@@ -5,7 +5,7 @@ from time import sleep, time
 from data import Event, process_data
 from display import clear_displays, get_displays
 from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
-                       MODE_DEFAULT, ENERGY_METHOD_DEFAULT
+                       MODE_DEFAULT, ENERGY_METHOD_DEFAULT, WAIT_WRITE
 from utility import wait_for_matrix_ready
 
 
@@ -23,7 +23,7 @@ def reset():
     g_break = False  # Global break statement so each thread knows when to quit.
 
 
-def initialise(layout=None, bus=None, displays=None, force_displays=False):
+def initialise(layout=None, bus=None, displays=None, force_displays=False, mirror=False):
     global g_bus
     global g_displays
 
@@ -36,7 +36,7 @@ def initialise(layout=None, bus=None, displays=None, force_displays=False):
 
     wait_for_matrix_ready()
 
-    g_displays = get_displays(g_bus, layout, force_displays) if displays is None else displays
+    g_displays = get_displays(g_bus, layout, force_displays, mirror) if displays is None else displays
 
     assert len(g_displays) > 0, 'No displays found.'
 
@@ -83,6 +83,7 @@ def data_manager(data):
         # Get the next event.
         try:
             event = data.pop(0)
+            #print(event)
         except IndexError:
             no_new_data = True
 
@@ -94,13 +95,17 @@ def data_manager(data):
 
         # First, go and get all the IDs of the displays that are to be updated.
         updated_display_IDs = set(event.display_IDs)
-
+        #print("Updated display IDs ",updated_display_IDs)
+        
         # Then, use the set here so we only copy the buffers once.
         for ID in updated_display_IDs:
+            #print("ID ",ID,g_displays[ID].ID,g_displays[ID].addr)
             g_displays[ID].copy_buffer()
+        sleep(0.1) # without this, the copy doesn't always complete in time
 
         # Finally, actually do the pixel updates.
         for x, y, color, ID in event:
+            #print("x,y,color,ID ",x,y,color,ID)
             g_displays[ID].set_buffer_pixel(x, y, color)
 
         end_time = time()
@@ -126,7 +131,7 @@ def data_manager(data):
 
 def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
         energy_method=ENERGY_METHOD_DEFAULT,
-        force_displays=False, normalise=True):
+        force_displays=False, normalise=True, mirror=False):
     global g_bus
     global g_displays
 
@@ -138,13 +143,32 @@ def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
 
     assert isinstance(force_displays, bool)
     assert isinstance(normalise, bool)
+    assert isinstance(mirror, bool)
 
     time_start = time()
 
-    initialise(layout, bus, displays, force_displays)
+    initialise(layout, bus, displays, force_displays, mirror)
 
-    data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise)
-
+    data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    #min_e = 125
+    #max_e = 254
+    #bins = [125,132,141,150,159,167,175,254,255]
+    #cols = [125,114,117,68,32,-3,-20,34]
+    #for j in range(len(data)):
+    #    for k in range(len(data[j].colors)):
+    #        #if c < min_e:
+    #        #    min_e = c
+            #if c > max_e:
+            #    max_e = c
+    #        for i in range(len(bins)-1):
+    #            if data[j].colors[k] >= bins[i] and data[j].colors[k] < bins[i+1]:
+    #                data[j].colors[k] -= cols[i]
+    #print(count)
+    #print(data[0].display_IDs)
+    #print(data[0].colors)
+    #print(f"minimum colour {min_e}")
+    #print(f"maximum colour {max_e}")
+    #input()
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')
 

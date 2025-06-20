@@ -42,7 +42,7 @@ orientation_type = {
     'ROTATE_270': 3,
 }
 
-MODES = ['normal', 'phase']  # How should we display the data?
+MODES = ['normal', 'phase', 'scatter']  # How should we display the data?
 
 MODE_DEFAULT = 'normal'  # What is the default way to display the data?
 
@@ -62,8 +62,12 @@ COLORS = {
 COLOR_DEFAULT = COLORS.get('black')
 
 # The default colour gradient pattern is based on the energies.
-COLOR_GRADIENT_DEFAULT = ([50.0, 42.5, 35.0, 27.5, 20.0, 12.5, 5.0],  # Anything up to this energy value...
-                          [ 254,  125,  135,  145,  155,  165, 175])  # ... will have the following colour.
+# These are used as percentages of total hits on one detector. On gated data, we expect
+# incident photon on one of the middle four, so 25% of hits should be max color
+COLOR_GRADIENT_DEFAULT = ([20.0, 4.0, 3.0, 2.0, 1.0],  # Anything up to this energy value...
+                          [ 18,  24,  82,  127, 170])  # ... will have the following colour.
+#COLOR_GRADIENT_DEFAULT = ([50.0, 42.5, 35.0, 27.5, 20.0, 12.5, 5.0],  # Anything up to this energy value...
+#                          [ 254,  125,  135,  145,  155,  165, 175])  # ... will have the following colour.
 
 # Was mainly used for testing.
 COLOR_GRADIENT_OTHER = ([25.0, 20.0, 15.0, 10.0,  5.0],  # Anything up to this energy value...
@@ -89,10 +93,12 @@ DEVICE_NUM_MAX = 119 # Maximum device number sensible as in `i2cdetect -y 1`
 
 FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
-GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+#GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
+GRADIENT_DELAY = 1  # How long is the default between colour changes of pixels?
 GRADIENT_DELAY_PHASE = GRADIENT_DELAY / 5.0  # How long is the time between data changes in phase mode?
 
-EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
+#EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
+EVENT_TIME_DIFFERENCE_TOLERANCE = 1.0  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 
 EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 

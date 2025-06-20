@@ -6,15 +6,20 @@ from time import sleep
 from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, I2C_CMD_SET_ADDR, \
     I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_STR, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, LETTERS, \
-    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE
+    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE, I2C_CMD_DISP_ROTATE,I2C_CMD_DISP_OFFSET
 
 from utility import int_to_bytes
 
 
-def get_displays(bus, layout=None, force=False):
+def get_displays(bus, layout=None, force=False, mirror=False):
     assert isinstance(bus, SMBus)
     assert isinstance(force, bool)  # Can we reuse displays if not enough are found for the requested layout?
+    assert isinstance(mirror, bool)  # Can we reuse displays if not enough are found for the requested layout?
 
+    # Check for sensible layout. The layout represents a number of composite
+    # displays, e.g. (a,b) means two composite displays with "a" and "b" actual
+    # LED displays each. Thus layout should be either a single int (for one
+    # composite display) or a tuple of ints (for many composite displays).
     if layout is not None:
         if isinstance(layout, int):
             layout = (layout,)  # If a single number is supplied, turn it into a tuple.
@@ -23,35 +28,63 @@ def get_displays(bus, layout=None, force=False):
             assert all(isinstance(i, int) for i in layout)
 
     # Let's first work out how many displays we have by collecting the addresses.
+    print("Scanning for devices on I2C bus")
     addresses = get_addresses(bus)
+    print("Found devices with addresses: ",addresses)
 
     # If a layout was supplied, ensure we have at least enough devices.
+    # If Force is True, then this check is faked in the sense that if
+    # there aren't enough addresses we just pad the address list with
+    # copies of the addresses which are present.
     if layout is not None:
-        if len(addresses) < sum(layout):
-            if not force:
-                raise ValueError(f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.')
-            else:
-                addresses *= 1 + sum(layout) // len(addresses)  # Duplicate addresses until we have enough.
-
-        # We only keep the addresses that are needed if a layout is supplied.
-        addresses = addresses[:sum(layout)]
-
+        if mirror:
+            if len(addresses) < 2*sum(layout):
+                if not force:
+                    raise ValueError(f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.')
+                else:
+                    addresses *= 1 + sum(layout) // len(addresses)  # Duplicate addresses until we have enough.
+            # We only keep the addresses that are needed if a layout is supplied. We're mirroring each
+            # display, so we need twice as many for each composite display.
+            addresses = addresses[:2*sum(layout)]
+        else:
+            if len(addresses) < sum(layout):
+                if not force:
+                    raise ValueError(f'Requested layout size is {sum(layout)}, but only {len(addresses)} display(s) found.')
+                else:
+                    addresses *= 1 + sum(layout) // len(addresses)  # Duplicate addresses until we have enough.
+            # We only keep the addresses that are needed if a layout is supplied.
+            addresses = addresses[:sum(layout)]
+    
+            
     else:  # Just create a dummy layout if none was supplied.
         layout = (len(addresses),)
 
     # Let's now create the Display objects.
+    print(f"stored addresses: {addresses}")
     displays = []
 
     # The side, X and Y data for each display.
+    # E.g. if side_size is 4, sqrt(side_size) is 2 and the appropriate coordinates for display n are
+    #      X = n%2 and Y = n//2. Note that divmod returns these in the opposite order, i.e. Y , X.
     coordinates = [[divmod(n, int(ceil(sqrt(side_size)))) for n in range(side_size)] for side_size in layout]
 
     current_ID = 0
+    print(coordinates)
 
     for (side, YXs) in enumerate(coordinates):
+        # First give IDs to the principle displays; for testing when using fewer displays ("sides"), can set side
+        # to a different value to plot the data for another side instead
         for Y, X in YXs:  # divmod() gives (Y, X) co-ordinates so need to be careful.
-            displays.append(Display(side=side, X=X, Y=Y, ID=current_ID, address=addresses[current_ID]))
+            displays.append(Display(side=side+1, X=X, Y=Y, ID=current_ID, address=addresses[current_ID]))
             current_ID += 1
 
+        # Now give IDs to any displays which are "mirroring" a principal display. When mirroring, the mirror display should
+        # have the same display coordinates (the actual mirroring is done at setup for the addresses, and when plotting)
+        if mirror:
+             for Y, X in YXs:  # divmod() gives (Y, X) co-ordinates so need to be careful.
+                displays.append(Display(side=side+1, X=X, Y=Y, ID=current_ID, address=addresses[current_ID],mirror=True))
+                current_ID += 1
+            
     return displays
 
 
@@ -106,6 +139,17 @@ def display_arranger(bus, displays):
 
     return string[:-1]
 
+def display_rainbow(bus,displays):
+    c = ["red","orange","yellow","green","cyan","blue","purple","pink"]
+    for i in range(len(displays)):
+        print(f"{c[i]} = ",end="")
+        displays[i].display_string(bus,displays[i].char,color=c[i],forever=True)
+        
+def display_rainbow_2(bus,display):
+    for i in range(255):
+        display.display_string(bus,"X",color=i,forever=True)
+        sleep(0.3)
+
 
 def switch_displays(display_A, display_B):
     assert isinstance(display_A, Display)
@@ -125,6 +169,19 @@ def switch_displays_from_chars(displays, char1, char2):
 
     switch_displays(display1, display2)
 
+def testing():
+    print("hello world")
+
+def rotate_display_from_char(bus,displays,char,num):
+    assert isinstance(char, str)
+    assert len(char) == 1
+    assert isinstance(num, int)
+    display = get_display_from_char(displays, char)
+    print(f"address: {display.addr}")
+    print(bus.read_byte_data(display.addr,I2C_CMD_DISP_ROTATE))
+    bus.write_byte_data(display.addr,I2C_CMD_DISP_ROTATE,num)
+    sleep(WAIT_WRITE)
+    print(bus.read_byte_data(display.addr,I2C_CMD_DISP_ROTATE))
 
 def get_display_from_char(displays, char):
     assert isinstance(char, str)
@@ -152,25 +209,37 @@ def get_display_ID(displays, x, y, side):
 
     display_size = displays[0].size  # We are assuming they are all the same size.
 
+    # Uppercase X and Y are *not* pixel coordinates, but rather they refer to the display coordinates
+    # within the composite display
     X = x // display_size  # This is the display.X value we want to search for.
     Y = y // display_size  # This is the display.Y value we want to search for.
 
+    # Default the display ID to nonsensical value
+    main_ID   = -1
+    mirror_ID = -1
+
     for display in displays:
         if (display.X == X) and (display.Y == Y) and (display.side == side):
-            return display.ID
+            if(display.mirror):
+                mirror_ID = display.ID
+            else:
+                main_ID   = display.ID
+
+    return (main_ID,mirror_ID)
 
     raise ValueError(f'Could not find display to show pixel ({x}, {y}) on side {side}.')
 
 
 class Display:
     def __init__(self, size=8, side=0, X=0, Y=0,
-                 ID=0, address=DEFAULT_I2C_ADDR):
+                 ID=0, address=DEFAULT_I2C_ADDR, mirror=False):
         assert isinstance(size, int)
         assert isinstance(side, int)
         assert isinstance(X, int)
         assert isinstance(Y, int)
         assert isinstance(ID, int)
         assert isinstance(address, int)
+        assert isinstance(mirror, bool)
 
         assert size == 8, 'HARD CODED SIZE OF 8 FOR NOW.'  # TODO: displays are currently hard coded to a size of 8x8.
         assert size > 0, 'Size of display must be > 0.'
@@ -187,6 +256,7 @@ class Display:
         self.ID = ID
         self.char = LETTERS[ID]
         self.addr = address
+        self.mirror = mirror
 
         self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]  # [Pixel() for _ in range(self.size * self.size)]
         self.frame_B = deepcopy(self.frame_A)
@@ -273,6 +343,7 @@ class Display:
         if isinstance(color, str):
             assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}.'
             color = COLORS[color]
+            print(color)
         elif isinstance(color, int):
             assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
 
@@ -354,7 +425,9 @@ class Display:
         assert isinstance(x, int)
         assert isinstance(y, int)
         assert isinstance(color, int)
-
+        #print(color)
+        #if color>255:
+        #    color=251
         assert self.size > x >= 0, 'Error: x value supplied is outside of frame range.'
         assert self.size > y >= 0, 'Error: y value supplied is outside of frame range.'
         assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
@@ -373,3 +446,46 @@ class Display:
     def switch_buffer(self):
         self.display_frame_A = not self.display_frame_A
 
+
+def set_global_orientation(bus, orientation=1):
+    assert isinstance(bus, SMBus)
+    assert isinstance(orientation, int)
+
+    addresses = get_addresses(bus)
+
+    for address in addresses:
+        
+        bus.write_byte_data(address, I2C_CMD_DISP_ROTATE,orientation)
+        sleep(WAIT_WRITE)
+
+def display_IDs(bus, color='blue', duration=2, forever=True):
+    assert isinstance(bus, SMBus)
+    assert isinstance(color, (str, int))
+    assert isinstance(duration, (float, int))
+    assert isinstance(forever, bool)
+    
+    assert duration > 0.001, 'Error: duration should be at least 1 ms.'
+
+    if isinstance(color, str):
+        assert color in COLORS.keys(), f'Error: invalid colour {color} must be one of {COLORS.keys()}.'
+        color = COLORS[color]
+    elif isinstance(color, int):
+        assert 255 >= color >= 0, 'Colour number should be between 0 and 255.'
+
+    addresses = get_addresses(bus)
+
+    for address in addresses:
+        
+        number_bytes = int_to_bytes(address)
+        duration_bytes = int_to_bytes(int(duration * 1000)) # Duration is in ms.
+    
+        #data = [number_bytes[1], number_bytes[0], duration_bytes[1], duration_bytes[0], forever, color]
+
+        string = str(address)
+        data = [forever, duration_bytes[1], duration_bytes[0], len(string), color] + list(string.encode('ascii'))
+    
+        bus.write_i2c_block_data(address, I2C_CMD_DISP_STR, data)
+
+        
+        #bus.write_i2c_block_data(address, I2C_CMD_DISP_NUM, data)
+        sleep(WAIT_WRITE)

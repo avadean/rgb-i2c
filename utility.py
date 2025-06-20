@@ -17,21 +17,38 @@ def int_to_bytes(num):
     return [int(i) for i in num.to_bytes(2, byteorder='big', signed=True)]
 
 
-def get_color_from_gradient(quantity, color_gradient):
+def get_color_from_gradient(quantity, color_gradient, total_points=100):
     ''' This returns the colour associated with a given quantity and colour gradient pattern.
         For example, the quantity could be an energy. For high energies it could return white
         and for low return blue. '''
 
     assert isinstance(quantity, (float, int))
+    assert isinstance(total_points, int)
 
     bounds, colors = color_gradient
 
+    # Assume that each point is two photons, so "total_points" is twice as large as we want for color scale
+    # we convert to a percentage of the actual events
+    scaled_quantity = 100*quantity/(total_points/2)
+    #print("Value ",quantity,scaled_quantity,total_points/2)
+    
+    max_c = 0
+    # step = bounds[0]-bounds[1]
     # Loop through the bounds from smallest to largest.
+    #print(" ")
+    #print("Called with value ",quantity)
     for upper_bound, color in zip(bounds[::-1], colors[::-1]):
-        if quantity <= upper_bound:
+        #print("Value, testing upperbound ",quantity,scaled_quantity,upper_bound)
+        if scaled_quantity <= upper_bound:
+            #print(quantity)
+            #print(253*quantity/bounds[0])
+            
+#            return int(220*quantity/bounds[0]) # - color
+            #print("color ",color)
             return color
-    else:
-        return colors[0]  # If we the quantity doesn't fit anywhere, assume it is the highest quantity colour.
+        #else:
+        #print(quantity)
+    return max_c #colors[0]  # If we the quantity doesn't fit anywhere, assume it is the highest quantity colour.
 
 
 def get_num_ticks(quantity, rate):
