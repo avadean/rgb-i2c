@@ -1,6 +1,6 @@
 from copy import deepcopy
-from numpy import  arctan2, inf, where, zeros
-import pandas as pd
+from numpy import loadtxt, arctan2, inf, where, zeros
+
 from display import Display, get_display_ID
 from parameters import MODES, MODE_DEFAULT, \
                        PHASE_MODE_TICKS, \
@@ -86,12 +86,8 @@ def process_data(file_,
         # The first half of the data is for help with the phase diagram.
         # The second half of the data is to be display on side 1 as it would in 'normal' mode.
 
-	# BT: with pandas you can split filter the datframe based on a condion that may be more useful 
-	# than creating a lsit and spliting it in two.
-     
-        data_phase = data_raw.loc[data_raw['side']==0]
-        data_raw = data_raw.loc[data_raw['side']==1]               
-    
+        data_phase = data_raw[:len(data_raw)//2]
+        data_raw = data_raw[len(data_raw)//2:]
 
         # Let's go and process the data_raw as normal, and then tie in the phase data after.
 
@@ -123,11 +119,7 @@ def process_data(file_,
 
         # Collect the list of DataPoints, accounting for the energy method.
         if energy_method == 'accumulate':
-            data_raw = get_energy_accum_data(data_raw)
-            data_processed = []
-            # BT: Applying the function to convert pandas dataframe to datapoint class row-wise
-            data_processed = data_raw.apply(dframe_to_dpclass,starttime=data_raw['time'].min(), endtime=data_raw['time'].max(),axis=1)
-
+            data_processed = get_energy_accum_data(data_raw)
         elif energy_method == 'tick':
             data_processed = get_energy_tick_data(data_raw, gradient_delay=GRADIENT_DELAY_PHASE, phase_mode=mode=='phase')
 
@@ -410,30 +402,39 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert isinstance(mode, str)
     assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
-    # create pandas dataframe from csv file containing all the data points
-    data = pd.read_csv(file_, sep=',')
+    data = loadtxt(file_, delimiter=',')
 
     assert len(data.shape) == 2, 'Need more than 1 data point.'  # Dealing with numpy's awkward shape size.
     assert data.shape[0] > 0, f'No data in file {file_}.'
     assert data.shape[1] == 6, 'Number of columns of data should be 6.'
 
-   # BT:  give the datframe columns some sensible lables 
-    data.columns = ['time', 'ID', 'side', 'x', 'y', 'energy']
-    
-  # BT: all these assresions now take one operastion rather than several loops  
-    assert data['time'].min() >= 0.0, 'Data point with time < 0.'
-    assert data['side'].isin([0,1]).all(), 'Data point with side not equal to 0 or 1.'  # TODO: relax this condition?
-    assert data['x'].min() >= 0.0, 'Data point with x pixel < 0.'
-    assert data['y'].min() >= 0.0, 'Data point with y pixel < 0.'
-    assert data['energy'].min() >= 0.0, 'Data point with energy < 0.'# TODO: include? BT: sure can't hurt to sanity check
-      
+    # We need four pieces of data: the initial photon hits on each detector, and
+    # the two hits from those photons scattering
+    assert data.shape[0] % 4 == 0, 'We require 4 pieces of data for each event.'
 
-    #energy = [1.0 for e in energy]  # TODO: add mode for this.
+    # Extract the time, crystal ID, detector side, x, y and energy from the data
+    # as tuples
+    time, ID, side, x, y, energy = zip(*data)
+
+    # Convert the tuples to lists
+    time = list(map(float, time))
+    ID = list(map(int, ID))
+    side = list(map(int, side))
+    x = list(map(int, x))  # NB lowercase x refers to the pixel coordinate in (16,16)
+    y = list(map(int, y))  # NB lowercase y refers to the pixel coordinate in (16,16)
+    energy = list(map(float, energy))
+
+    assert all(t >= 0.0 for t in time), 'Data point with time < 0.'
+    assert all(s >= 0 for s in side), 'Data point with side < 0.'
+    assert all(x_i >= 0 for x_i in x), 'Data point with x pixel < 0.'
+    assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
+    #assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'  # TODO: include?
+
+    energy = [1.0 for e in energy]  # TODO: add mode for this.
 
     if mode == 'phase':
-        assert data.shape[0] % 4 == 0, 'Phase mode requires 4 pieces of data for each event.'
-	# BT: not sure if we need this here or futher up? we certainly dont need both
-        assert data['side'].isin([0,1]).all(), 'Data point with side not equal to 0 or 1.'
+        assert all(s in (0, 1) for s in side), 'Need only side 0 and 1 for phase mode.'
+
         # Side 0 will show a diagram of phase data.
         # Side 1 will show its data just as in mode=='normal'
         # DataPoint 1: Absorption/scatter on detector 0 with x,y,energy.
@@ -443,15 +444,46 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
         # We split up this data into two sets - that to be displayed normally and the corresponding data to create the phase diagram.
         # The phase data comes first and then the data to display normally.
 
-        # I belive this line does the trick, basically sort all the values by both side and time
-        data = data.sort_values(['side','time'])
+        time0, time1 = [], []
+        side0, side1 = [], []
+        x0, x1 = [], []
+        y0, y1 = [], []
+        energy0, energy1 = [], []
+
+        for n, s in enumerate(side):
+            if n % 4 in (0, 1):
+                assert s == 0, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
+
+                time0.append(time[n])
+                side0.append(side[n])
+                x0.append(x[n])
+                y0.append(y[n])
+                energy0.append(energy[n])
+
+            elif n % 4 in (2, 3):
+                assert s == 1, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
+
+                time1.append(time[n])
+                side1.append(side[n])
+                x1.append(x[n])
+                y1.append(y[n])
+                energy1.append(energy[n])
+
+        time = time0 + time1
+        side = side0 + side1
+        x = x0 + x1
+        y = y0 + y1
+        energy = energy0 + energy1
 
     if normalise:
+        minimum = min(time)
+        difference = max(time) - minimum
         num_data_points = data.shape[0]
         factor = 5.0 * float(num_data_points) / 5000.0
-        data['time'] = factor * (data['time'] - data['time'].min())/(data['time'].max() - data['time'].min())
 
-    return data
+        time = [factor * (t - minimum) / (difference) for t in time]
+
+    return list(zip(time, ID, x, y, side, energy))  # Note: we have put side to the right of (x, y) rather than the left.
 
 
 def group_events(events):
@@ -500,15 +532,46 @@ def get_energy_accum_data(data_raw):
         gets the data points with their own energy. It then ensures the data is sorted
         and the energies of the pixels updated to be accumulative. '''
 
+    data_processed = []
 
-    data_processed = data_raw.sort_values('time') # Sorted based on start_time. BT: probably not necessary
+    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
+        data_processed.append(DataPoint(x, y, s, e, start_time=t))
+
+    data_processed = sorted(data_processed)  # Sorted based on start_time.
 
     # We need to make the energy of the data point equal to itself plus the previous energy of the pixel.
     # If there are no hits of the pixel before data point, then its energy is left unchanged.
-    #
-    # BT: This should do the trick
-    data_processed['energy']=data_processed.groupby(['x','y'])['energy'].cumsum()
+    #min_e = 0
+    #max_e = 0
+    for n, dA in enumerate(data_processed):  # d for data point.
 
+        # We ignore the first data point as this will never need its energy updated.
+        if n == 0:
+            #min_e = dA.energy
+            #max_e = dA.energy
+            continue
+
+        # Only bother look at data points before the currently considered one **in reverse**.
+        for dB in data_processed[n-1::-1]:
+
+            # We're looking for data points that hit the same pixel.
+            if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
+
+                # Both data points hit the same pixel. The energy of dA should be itself plus dB.
+                dA.energy += dB.energy
+
+                # Don't want to add any energies, as we would be double counting.
+                break
+        #if dA.energy < min_e:
+        #    min_e = dA.energy
+        #if dA.energy > max_e:
+        #    max_e = dA.energy
+    #kit=False
+    #if kit:
+    #    for n, dA in enumerate(data_processed):
+    #        dA.energy -= min_e
+    #    max_e -= min_e
+    #    print(f"max energy = {max_e}")
     return data_processed
 
 
@@ -520,13 +583,16 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
         If in phase_mode, the energy tick rate required is set to enforce a constant
         number of ticks regardless the energy of the data point. '''
 
-    data_raw['energy_tick_rate'] = get_rate(data_raw['energy'], num_ticks=PHASE_MODE_TICKS) if phase_mode else energy_tick_rate  # Number of ticks held constant if in phase_mode.
-    data_raw['num_ticks'] = get_num_ticks(data_raw['energy'], energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-    data_raw['alight_time'] = get_quantity(data_raw['num_ticks'], gradient_delay)  # How long should this pixel be lit up for?
+    data_processed = []
 
-# initalise values for start and end times
-    start_time = data_raw['time'].tolist()
-    end_time = (data_raw['time'] + data_raw['alight_time']).tolist()
+    for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
+        energy_tick_rate = get_rate(e, num_ticks=PHASE_MODE_TICKS) if phase_mode else energy_tick_rate  # Number of ticks held constant if in phase_mode.
+        num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+        alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
+
+        data_processed.append(DataPoint(x, y, s, e, energy_tick_rate, num_ticks, start_time=t, end_time=t+alight_time))
+
+    data_processed = sorted(data_processed)  # Sorted based on start_time.
 
     if phase_mode:
 
@@ -542,65 +608,57 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
         # F should have start time of E.
         # Etc...
 
-        assert len(start_time) % 2 == 0        
+        assert len(data_processed) % 2 == 0
 
-        for n in range(0, len(start_time), 2):
+        for n in range(0, len(data_processed), 2):
 
             # Don't need to update the start time of the initial data.
             if n != 0:
-                
-                time_diff = start_time[n] - end_time[n-2]
-                start_time[n] -= time_diff
-                end_time[n] -= time_diff  # We do end times too for completeness.
+                time_diff = data_processed[n].start_time - data_processed[n-2].end_time
 
-            time_diff = start_time[n+1] - start_time[n]
+                data_processed[n].start_time -= time_diff
+                data_processed[n].end_time -= time_diff  # We do end times too for completeness.
 
-            start_time[n+1] -= time_diff
-            end_time[n+1] -= time_diff  # We do end times too for completeness.
-        # add processed start/end times to dataframe
-        data_raw['start_time'] = start_time
-        data_raw['end_time'] = end_time
+            time_diff = data_processed[n+1].start_time - data_processed[n].start_time
 
-        
+            data_processed[n+1].start_time -= time_diff
+            data_processed[n+1].end_time -= time_diff  # We do end times too for completeness.
 
     else:
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for nA, t in enumerate(end_time):  # Loop over each datapoint.
-            # get X and Y and end_time for the current data point
-            curr_x = data_raw['x'][nA]
-            curr_y = data_raw['y'][nA]
-            # this list contains the index of all the data points that occur on the same pixel as the current datapoint 
-            # and overlap in time.
+        for n, dA in enumerate(data_processed):  # d for data point.
 
-            for nB, row_i in enumerate(data_raw.iterrows()):
-                # Only bother look at data points ahead of the currently considered one.
-                if nB >= nA:
-                    continue
-                if (row_i['x'] == curr_x) & (row_i['y'] == curr_y) & (row_i['start_time'] < t):
+            # Only bother looking at data points ahead of the currently considered one.
+            for dB in data_processed[n+1:]:
+                # Data is sorted in time, so if event B starts after A has "ticked away" then no later events
+                # need to be checked
+                if (dB.start_time > dA.end_time):
+                    break
+                
+                # We're looking for data points that hit the same pixel and iB starts before the end of iA.
+                if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
 
                     # An event, dB, occurs within the time frame that dA is still alight.
 
                     # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
                     # This includes remove the final background colour tick of iA, which iB will now deal with.
-                    data_raw['num_ticks'].iat[nA] -= get_num_ticks(data_raw['end_time'].iat[nA]-data_raw['start_time'].iat[nB], gradient_delay)
+                    dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
 
                     # The initial iA event end time is now equal to the latter iB event start time.
-                    data_raw['end_time'].iat[nA] = data_raw['start_time'].iat[nB]
+                    dA.end_time = dB.start_time
 
                     # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
-                    data_raw['energy'].iat[nB] += data_raw['energy'].iat[nA] - data_raw['num_ticks'].iat[nA] * energy_tick_rate
+                    dB.energy += dA.energy - dA.ticks * energy_tick_rate
 
                     # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
-                    data_raw['num_ticks'].iat[nB] = get_num_ticks(data_raw['energy'].iat[nB], energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-                    data_raw['end_time'].iat[nB] = data_raw['start_time'].iat[nB] + get_quantity(data_raw['num_ticks'].iat[nB], gradient_delay)  # Start time + alight time.
+                    dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                    dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
 
-                    # # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
+                    # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
                     break
-                else:
-                    continue
-                
-    return data_raw
+
+    return data_processed
 
 
 def get_energy_accum_events(data_points, displays, color_gradient=COLOR_GRADIENT_DEFAULT):
@@ -668,9 +726,6 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
                 events.append(Event([x], [y], [color], [mirror_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
     return events
 
-def dframe_to_dpclass(data,starttime,endtime):
-    ' function to take in a pandas datframe and construct a list of datapoints for each row'
-    return DataPoint(x=int(data['x']),y=int(data['y']),side=int(data['side']),energy=float(data['energy']),start_time=starttime,end_time=endtime)
 
 class DataPoint:
     def __init__(self, x, y, side=0, energy=0.0, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
