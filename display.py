@@ -7,7 +7,7 @@ from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, I
     I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_STR, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
     I2C_MULTIPLEXER_ID, I2C_MULTIPLEXER_CHANNEL_IDs, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, CHANNEL_NUM_MIN, CHANNEL_NUM_MAX, LETTERS, \
-    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE, I2C_CMD_DISP_ROTATE,I2C_CMD_DISP_OFFSET
+    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE, I2C_CMD_DISP_ROTATE
 
 from utility import int_to_bytes
 
@@ -55,7 +55,6 @@ def get_displays(bus, layout=None, mirror=False):
             layout = (len(addresses) // 2,)
         else:
             layout = (len(addresses),)
-    print("using addresses", addresses)
 
     # Let's now create the Display objects.
     print(f"stored addresses: {addresses}")
@@ -67,7 +66,6 @@ def get_displays(bus, layout=None, mirror=False):
     coordinates = [[divmod(n, int(ceil(sqrt(side_size)))) for n in range(side_size)] for side_size in layout]
 
     current_ID = 0
-    print(coordinates)
 
     for (side, YXs) in enumerate(coordinates):
         # First give IDs to the principle displays; for testing when using fewer displays ("sides"), can set side
@@ -148,12 +146,14 @@ def display_arranger(bus, displays):
 
     return string[:-1]
 
+
 def display_rainbow(bus,displays):
     c = ["red","orange","yellow","green","cyan","blue","purple","pink"] * len(displays)
     for i in range(len(displays)):
         print(f"{c[i]} = ",end="")
         displays[i].display_string(bus,displays[i].char,color=c[i],forever=True)
-        
+
+
 def display_rainbow_2(bus,display):
     for i in range(255):
         display.display_string(bus,"X",color=i,forever=True)
@@ -178,8 +178,6 @@ def switch_displays_from_chars(displays, char1, char2):
 
     switch_displays(display1, display2)
 
-def testing():
-    print("hello world")
 
 def rotate_display_from_char(bus,displays,char,num):
     assert isinstance(char, str)
@@ -229,12 +227,12 @@ def get_display_ID(displays, x, y, side):
 
     for display in displays:
         if (display.X == X) and (display.Y == Y) and (display.side == side):
-            if(display.mirror):
+            if display.mirror:
                 mirror_ID = display.ID
             else:
                 main_ID   = display.ID
 
-    return (main_ID,mirror_ID)
+    return main_ID, mirror_ID
 
     raise ValueError(f'Could not find display to show pixel ({x}, {y}) on side {side}.')
 
@@ -269,7 +267,7 @@ class Display:
         self.channel = channel
         self.mirror = mirror
 
-        self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]  # [Pixel() for _ in range(self.size * self.size)]
+        self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]
         self.frame_B = deepcopy(self.frame_A)
 
         self.display_frame_A = True  # Do we use the A or B frame for displaying?
@@ -292,7 +290,7 @@ class Display:
         assert isinstance(bus, SMBus)
         assert isinstance(new_address, int)
 
-        assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {address} outside of sensible range.'
+        assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {new_address} outside of sensible range.'
 
         bus.write_byte_data(self.addr, I2C_CMD_SET_ADDR, new_address)
         sleep(WAIT_WRITE)
@@ -480,7 +478,7 @@ class Display:
         self.display_frame_A = not self.display_frame_A
 
 
-def set_global_orientation(bus, displays, orientation=1):
+def set_global_orientation(bus, orientation=1):
     assert isinstance(bus, SMBus)
     assert isinstance(orientation, int)
 

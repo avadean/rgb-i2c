@@ -2,12 +2,17 @@ from smbus import SMBus
 from threading import Thread
 from time import sleep, time
 
-from data import Event, process_data
+from data import Event, process_data, store_data, load_data
 from display import clear_displays, get_displays, activate_channel
-from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
-                       MODE_DEFAULT, ENERGY_METHOD_DEFAULT, WAIT_WRITE
+from parameters import EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, ENERGY_METHOD_DEFAULT
 from utility import wait_for_matrix_ready
-from data import storeData, loadData
+
+
+global g_bus
+global g_displays
+global g_break
+global g_current_channel
+
 
 def get_bus():
     return SMBus(1)
@@ -25,7 +30,7 @@ def reset():
     g_current_channel = None  # What channel of the multiplexer are we currently on?
 
 
-def initialise(layout=None, bus=None, displays=None, force_displays=False, mirror=False):
+def initialise(layout=None, bus=None, displays=None, mirror=False):
     global g_bus
     global g_displays
 
@@ -38,7 +43,7 @@ def initialise(layout=None, bus=None, displays=None, force_displays=False, mirro
 
     wait_for_matrix_ready()
 
-    g_displays = get_displays(g_bus, layout, force_displays, mirror) if displays is None else displays
+    g_displays = get_displays(g_bus, layout, mirror) if displays is None else displays
 
     assert len(g_displays) > 0, 'No displays found.'
 
@@ -84,6 +89,8 @@ def data_manager(data):
 
     first_pass = True
     no_new_data = False
+
+    event = None
 
     while True:
         start_time = time()
@@ -136,19 +143,8 @@ def data_manager(data):
 
         first_pass = False
 
-def preprocess_data(file_=None, mode=MODE_DEFAULT,displays=None,
-        energy_method=ENERGY_METHOD_DEFAULT,layout=None,
-        normalise=True, mirror=False, out_file='example'):
-        
-    bus=None
-    #initialise(layout, bus, displays, force_displays, mirror)
-    time_start = time()
-    data = process_data(file_, displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
-    storeData(_file=out_file,data=data)
-    time_end = time()
-    print(f'Pre-processing complete in {time_end-time_start}s', )
 
-def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
+def run(file_=None, layout=None, bus=None, displays=None,
         energy_method=ENERGY_METHOD_DEFAULT,
         force_displays=False, normalise=True, mirror=False,data_file=''):
     global g_displays
@@ -165,11 +161,12 @@ def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
 
     time_start = time()
 
-    initialise(layout, bus, displays, force_displays, mirror)
+    initialise(layout, bus, displays, mirror)
+
     if data_file == '':
-        data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+        data = process_data(file_, g_displays, energy_method=energy_method, normalise=normalise, mirror=mirror)
     else:
-        data = loadData(data_file)
+        data = load_data(data_file)
 
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')
