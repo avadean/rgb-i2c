@@ -7,7 +7,7 @@ from parameters import DEFAULT_I2C_ADDR, I2C_CMD_DISP_OFF, I2C_CMD_GET_DEV_ID, I
     I2C_CMD_DISP_EMOJI, I2C_CMD_DISP_NUM, I2C_CMD_DISP_STR, I2C_CMD_DISP_CUSTOM, I2C_CMD_CONTINUE_DATA, \
     I2C_MULTIPLEXER_ID, I2C_MULTIPLEXER_CHANNEL_IDs, \
     DEVICE_NUM_MIN, DEVICE_NUM_MAX, CHANNEL_NUM_MIN, CHANNEL_NUM_MAX, LETTERS, \
-    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE, I2C_CMD_DISP_ROTATE,I2C_CMD_DISP_OFFSET
+    COLORS, COLOR_DEFAULT, WAIT_READ, WAIT_WRITE, I2C_CMD_DISP_ROTATE
 
 from utility import int_to_bytes
 
@@ -267,7 +267,7 @@ class Display:
         self.channel = channel
         self.mirror = mirror
 
-        self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]  # [Pixel() for _ in range(self.size * self.size)]
+        self.frame_A = [COLOR_DEFAULT for _ in range(self.size * self.size)]
         self.frame_B = deepcopy(self.frame_A)
 
         self.display_frame_A = True  # Do we use the A or B frame for displaying?
@@ -290,7 +290,7 @@ class Display:
         assert isinstance(bus, SMBus)
         assert isinstance(new_address, int)
 
-        assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {address} outside of sensible range.'
+        assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {new_address} outside of sensible range.'
 
         bus.write_byte_data(self.addr, I2C_CMD_SET_ADDR, new_address)
         sleep(WAIT_WRITE)
@@ -478,7 +478,7 @@ class Display:
         self.display_frame_A = not self.display_frame_A
 
 
-def set_global_orientation(bus, displays, orientation=1):
+def set_global_orientation(bus, orientation=1):
     assert isinstance(bus, SMBus)
     assert isinstance(orientation, int)
 

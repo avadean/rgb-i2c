@@ -2,12 +2,16 @@ from smbus import SMBus
 from threading import Thread
 from time import sleep, time
 
-from data import Event, process_data
+from data import Event, process_data, store_data, load_data
 from display import clear_displays, get_displays, activate_channel
-from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
-                       MODE_DEFAULT, ENERGY_METHOD_DEFAULT, WAIT_WRITE
+from parameters import EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, ENERGY_METHOD_DEFAULT
 from utility import wait_for_matrix_ready
-from data import store_data, load_data
+
+
+global g_bus
+global g_displays
+global g_break
+global g_current_channel
 
 
 def get_bus():
@@ -26,7 +30,7 @@ def reset():
     g_current_channel = None  # What channel of the multiplexer are we currently on?
 
 
-def initialise(layout=None, bus=None, displays=None, force_displays=False, mirror=False):
+def initialise(layout=None, bus=None, displays=None, mirror=False):
     global g_bus
     global g_displays
 
@@ -86,6 +90,8 @@ def data_manager(data):
     first_pass = True
     no_new_data = False
 
+    event = None
+
     while True:
         start_time = time()
 
@@ -138,7 +144,7 @@ def data_manager(data):
         first_pass = False
 
 
-def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
+def run(file_=None, layout=None, bus=None, displays=None,
         energy_method=ENERGY_METHOD_DEFAULT,
         force_displays=False, normalise=True, mirror=False,data_file=''):
     global g_displays
@@ -155,9 +161,10 @@ def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
 
     time_start = time()
 
-    initialise(layout, bus, displays, force_displays, mirror)
+    initialise(layout, bus, displays, mirror)
+
     if data_file == '':
-        data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+        data = process_data(file_, g_displays, energy_method=energy_method, normalise=normalise, mirror=mirror)
     else:
         data = load_data(data_file)
 

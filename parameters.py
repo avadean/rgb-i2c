@@ -46,10 +46,6 @@ orientation_type = {
     'ROTATE_270': 3,
 }
 
-MODES = ['normal', 'phase', 'scatter']  # How should we display the data?
-
-MODE_DEFAULT = 'normal'  # What is the default way to display the data?
-
 COLORS = {
     'red': 0x00,
     'orange': 0x12,
@@ -85,8 +81,6 @@ ENERGY_METHOD_DEFAULT = 'accumulate'  # Should the energy of a pixel tick away o
 
 ENERGY_TICK_RATE_DEFAULT = 5.0  # Every `GRADIENT_DELAY` seconds, the energy of a pixel should decay by how much?
 
-PHASE_MODE_TICKS = 2  # How many ticks should occur for each data point if in phase mode?
-
 WAIT_WRITE = 0.001 # Time to wait for Bus after a write statement.
 WAIT_READ = 0.1 # Time to wait for Bus after a read statement
 WAIT_INITIAL = 0.1 # Time to wait for Bus on startup.
@@ -102,7 +96,6 @@ FRAME_RATE = 1.0 / 30.0 # How often is the frame manager updated?
 
 #GRADIENT_DELAY = 0.5  # How long is the default between colour changes of pixels?
 GRADIENT_DELAY = 1  # How long is the default between colour changes of pixels?
-GRADIENT_DELAY_PHASE = GRADIENT_DELAY / 5.0  # How long is the time between data changes in phase mode?
 
 #EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 EVENT_TIME_DIFFERENCE_TOLERANCE = 1.0  # If two pixel light-ups are within this time frame, then they are updated at the same time.

@@ -1,5 +1,6 @@
+from data import preprocess_data
 from display import display_rainbow_2, get_displays, switch_displays, switch_displays_from_chars, display_arranger, set_global_orientation,display_rainbow
-from manager import run, preprocess_data
+from manager import run
 from smbus import SMBus
 from time import sleep
 import sys
@@ -37,19 +38,17 @@ set_global_orientation(bus,1)
 if run_test:
     i=0
     while i<10:
-        run(file_=file_, layout=layout, \
-            bus=bus, displays=displays, \
-            mode='normal', \
-            energy_method='tick', \
+        run(file_=file_, layout=layout,
+            bus=bus, displays=displays,
+            energy_method='tick',
             mirror=True,data_file=file2_)
         i+=1
 else:
-    preprocess_data(file_=file_,  mode='normal',displays=displays,
+    preprocess_data(file_=file_, displays=displays,
             energy_method='tick',
             normalise=True, mirror=True, out_file=file2_)
 
-#run(file_=file_, layout=layout, \
-#    bus=bus, displays=displays, \
-#    mode='normal', \
+#run(file_=file_, layout=layout,
+#    bus=bus, displays=displays,
 #    energy_method='accumulate')
 

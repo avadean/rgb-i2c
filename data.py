@@ -1,35 +1,29 @@
-from copy import deepcopy
-from numpy import loadtxt, arctan2, inf, where, zeros
-from time import time
+from numpy import loadtxt, inf
+from time import time as get_time
 from tqdm import tqdm
 from display import Display, get_display_ID
-from parameters import MODES, MODE_DEFAULT, \
-                       PHASE_MODE_TICKS, \
-                       COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
+from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
                        ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
-                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, GRADIENT_DELAY_PHASE, EXAMPLE_DATA, \
-                       PI
-from utility import get_color_from_gradient, get_num_ticks, get_quantity, get_rate, PhaseBin, get_phase_bin
-import math
+                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY
+from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 
-def preprocess_data(file_=None, mode=MODE_DEFAULT,displays=None,
+def preprocess_data(file_=None, displays=None,
                     energy_method=ENERGY_METHOD_DEFAULT,
                     normalise=True, mirror=False, out_file='example'):
 
-    time_start = time()
+    time_start = get_time()
 
-    data = process_data(file_, displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    data = process_data(file_, displays, energy_method=energy_method, normalise=normalise, mirror=mirror)
     store_data(_file=out_file,data=data)
 
-    time_end = time()
+    time_end = get_time()
 
     print(f'Pre-processing complete in {time_end-time_start}s', )
 
 
 def process_data(file_,
                  displays,
-                 mode=MODE_DEFAULT,
                  color_method=COLOR_METHOD_DEFAULT,
                  energy_method=ENERGY_METHOD_DEFAULT,
                  energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
@@ -48,351 +42,42 @@ def process_data(file_,
     assert isinstance(normalise, bool)  # Do we want to normalise the time of the data to have on avg. 100 data points per 5 sec?
     assert isinstance(mirror, bool)  # Do we want half the displays to "mirror" the other half? (Used when two composite displays are back-to-back)
 
-    mode = mode.strip().lower()
     color_method = color_method.strip().lower()
     energy_method = energy_method.strip().lower()
 
-    assert mode in MODES, f'{mode} is an unknown mode.'
     assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
     assert energy_method in ENERGY_METHODS, f'{energy_method} is an unknown energy method.'
 
-    data_raw = process_file(file_, mode=mode, normalise=normalise)  # The raw data from file.
+    data_raw = process_file(file_, normalise=normalise)  # The raw data from file.
+    data_processed = []
+    events = []
 
-    # Modes are just essentially a set of defined parameters.
-    if mode == 'normal':
-
-        # Do exactly what the user asked.
-        pass
-
-    elif mode == 'phase':
-
-        # Tick the displayed data over time due to its energy.
-        color_method = 'energy'
-        energy_method = 'tick'
-
-    elif mode == 'scatter':
-
-        # Do what the user asked
-        pass
-
-
-    if mode == 'normal':
-
-        # In normal mode, we simply show all the events and colour by the user defined parameters.
-        # There is no work to do.
-
-        pass
-
-    elif mode == 'phase':
-
-        # In phase mode, we require 2 sides to the layout, each of 2x2 displays.
-        displays_dict = {0: [(display.X, display.Y) for display in displays if display.side == 0],
-                         1: [(display.X, display.Y) for display in displays if display.side == 1]}
-
-        assert (0, 0) in displays_dict[0]
-        assert (0, 1) in displays_dict[0]
-        assert (1, 0) in displays_dict[0]
-        assert (1, 1) in displays_dict[0]
-        assert (0, 0) in displays_dict[1]
-        assert (0, 1) in displays_dict[1]
-        assert (1, 0) in displays_dict[1]
-        assert (1, 1) in displays_dict[1]
-
-        # The process_file function has already ordered the data for us.
-        # The first half of the data is for help with the phase diagram.
-        # The second half of the data is to be display on side 1 as it would in 'normal' mode.
-
-        data_phase = data_raw[:len(data_raw)//2]
-        data_raw = data_raw[len(data_raw)//2:]
-
-        # Let's go and process the data_raw as normal, and then tie in the phase data after.
-
- 
     if color_method == 'energy':  # Base the colouring on the energy of the detection.
 
         # Collect the list of DataPoints, accounting for the energy method.
         if energy_method == 'accumulate':
-            data_processed = get_energy_accum_data(data_raw)
+            data_processed += get_energy_accum_data(data_raw)
         elif energy_method == 'tick':
-            data_processed = get_energy_tick_data(data_raw, gradient_delay=GRADIENT_DELAY_PHASE, phase_mode=mode=='phase')
-
-
-    # Before creating the events, we need to tie in some phase data first.
-    if mode == 'phase':
-        # The data in data_raw comes in pairs, whereby we will display the phase of these pairs compared with the pairs in data_phase.
-        # We create a bin of phase differences.
-        # An exact arc will cut through 15 of the pixels on an 8x8 display. So we create 60 bins (one for each quadrant).
-
-        phase_bins = []
-        num_bins = 60
-
-        for n in range(num_bins):
-            lbound = 2.0 * PI * (float(n)) / float(num_bins)
-            ubound = 2.0 * PI * (float(n+1)) / float(num_bins)
-
-            phase_bins.append(PhaseBin(lbound, ubound))
-
-        # This will store the 'data points' of pixel changes for the phase side.
-        data_phase_processed = []
-
-        # We store a count of how many bins are contributing to each pixel on the screen so we know whether to turn it off or not.
-        # TODO: this assumes 2x2 lots of 8x8 screens.
-        frame_counts = zeros((16, 16), dtype=int)
-
-        for n in range(0, len(data_processed), 2):
-
-            # (x, y) co-ordinates.
-            A = (data_processed[n].x, data_processed[n].y)
-            B = (data_processed[n+1].x, data_processed[n+1].y)
-            C = (data_phase[n][2], data_phase[n][3])
-            D = (data_phase[n+1][2], data_phase[n+1][3])
-
-            phaseAB = float(arctan2(A[1]-B[1], A[0]-B[0], dtype=float))
-            phaseCD = float(arctan2(C[1]-D[1], C[0]-D[0], dtype=float))
-
-            # Get phase difference.
-            #phase_diff = phaseAB - phaseCD
-            # dot product
-            #print("pos",A,B,C,D)
-            #print("diff",A[0]-B[0],A[1]-B[1])
-            phase_diff = float((A[0]-B[0])*(C[0]-D[0]))
-            phase_diff = phase_diff/math.sqrt(float((A[0]-B[0])*(A[0]-B[0])+(A[1]-B[1])*(A[1]-B[1])))
-            phase_diff = phase_diff/math.sqrt(float((C[0]-D[0])*(C[0]-D[0])+(C[1]-D[1])*(C[1]-D[1])))
-
-            # Ensure angle is between 0 and 2PI.
-            if phase_diff < 0.0:
-                phase_diff += 2.0 * PI
-
-            #### Ensures angle is between -PI and PI.
-            ###if phase_diff > PI:
-            ###    phase_diff -= 2.0 * PI
-
-            ###if phase_diff <= -PI:
-            ###    phase_diff += 2.0 * PI
-
-            phase_bin = get_phase_bin(phase_bins, phase_diff)
-
-            # Save a copy of what the frame looks like.
-            frame_counts_old = deepcopy(frame_counts)
-
-            # Turn that pixel off.
-            frame_counts[phase_bin.y][phase_bin.x] -= 1
-
-            # Increment this phase bin.
-            phase_bin.count += 1
-
-            # Work out which phase bin has the highest count at the moment.
-            max_count = max([p.count for p in phase_bins])
-
-            # Work out if the pixel displaying the x and y has changed.
-            phase_bin.determine_x_y(max_count)
-
-            # Turn the new pixel on.
-            frame_counts[phase_bin.y][phase_bin.x] += 1
-
-            # Has anything on the frame changed?
-            frame_diff = frame_counts - frame_counts_old
-
-            on_y, on_x = where(frame_diff > 0)
-            off_y, off_x = where(frame_diff < 0)
-
-            assert on_y.size == on_x.size == off_y.size == off_x.size, 'Error when creating phase diagram.'
-
-            # If we have found a change, then create a data point for it if required.
-            if on_y.size == 1:
-                on_y, on_x = int(on_y), int(on_x)
-                off_y, off_x = int(off_y), int(off_x)
-
-                # Only turn the new pixel on, if the number of counts it had before was 0.
-                if frame_counts_old[on_y][on_x] == 0:
-                    data_phase_processed.append(DataPoint(on_x, on_y, side=0, energy=inf,
-                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
-
-                # Only turn the old pixel off, if the number of counts it has now is 0.
-                if frame_counts[off_y][off_x] == 0:
-                    data_phase_processed.append(DataPoint(off_x, off_y, side=0, energy=-inf,
-                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
-
-    # Before creating the events, we need to tie in some phase data first.
-    if mode == 'scatter':
-        # The data in data_raw comes in pairs, whereby we will display the phase of these pairs compared with the pairs in data_phase.
-        # We create a bin of phase differences.
-        # An exact arc will cut through 15 of the pixels on an 8x8 display. So we create 60 bins (one for each quadrant).
-
-        phase_bins = []
-        num_bins = 60
-
-        for n in range(num_bins):
-            lbound = 2.0 * PI * (float(n)) / float(num_bins)
-            ubound = 2.0 * PI * (float(n+1)) / float(num_bins)
-
-            phase_bins.append(PhaseBin(lbound, ubound))
-
-        # This will store the 'data points' of pixel changes for the phase side.
-        data_phase_processed = []
-
-        # We store a count of how many bins are contributing to each pixel on the screen so we know whether to turn it off or not.
-        # TODO: this assumes 2x2 lots of 8x8 screens.
-        frame_counts = zeros((16, 16), dtype=int)
-
-        for n in range(0, len(data_processed), 2):
-
-            # (x, y) co-ordinates.
-            A = (data_processed[n].x, data_processed[n].y)
-            B = (data_processed[n+1].x, data_processed[n+1].y)
-            C = (data_phase[n][2], data_phase[n][3])
-            D = (data_phase[n+1][2], data_phase[n+1][3])
-
-            phaseAB = float(arctan2(A[1]-B[1], A[0]-B[0], dtype=float))
-            phaseCD = float(arctan2(C[1]-D[1], C[0]-D[0], dtype=float))
-
-            # Get phase difference.
-            #phase_diff = phaseAB - phaseCD
-            # dot product
-            #print("pos",A,B,C,D)
-            #print("diff",A[0]-B[0],A[1]-B[1])
-            phase_diff = float((A[0]-B[0])*(C[0]-D[0]))
-            phase_diff = phase_diff/math.sqrt(float((A[0]-B[0])*(A[0]-B[0])+(A[1]-B[1])*(A[1]-B[1])))
-            phase_diff = phase_diff/math.sqrt(float((C[0]-D[0])*(C[0]-D[0])+(C[1]-D[1])*(C[1]-D[1])))
-
-            phase_bin = get_phase_bin(phase_bins, phase_diff)
-
-            # Save a copy of what the frame looks like.
-            frame_counts_old = deepcopy(frame_counts)
-
-            # Turn that pixel off.
-            frame_counts[phase_bin.y][phase_bin.x] -= 1
-
-            # Increment this phase bin.
-            phase_bin.count += 1
-
-            # Work out which phase bin has the highest count at the moment.
-            max_count = max([p.count for p in phase_bins])
-
-            # Work out if the pixel displaying the x and y has changed.
-            phase_bin.determine_x_y(max_count)
-
-            # Turn the new pixel on.
-            frame_counts[phase_bin.y][phase_bin.x] += 1
-
-            # Has anything on the frame changed?
-            frame_diff = frame_counts - frame_counts_old
-
-            on_y, on_x = where(frame_diff > 0)
-            off_y, off_x = where(frame_diff < 0)
-
-            assert on_y.size == on_x.size == off_y.size == off_x.size, 'Error when creating phase diagram.'
-
-            # If we have found a change, then create a data point for it if required.
-            if on_y.size == 1:
-                on_y, on_x = int(on_y), int(on_x)
-                off_y, off_x = int(off_y), int(off_x)
-
-                # Only turn the new pixel on, if the number of counts it had before was 0.
-                if frame_counts_old[on_y][on_x] == 0:
-                    data_phase_processed.append(DataPoint(on_x, on_y, side=0, energy=inf,
-                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
-
-                # Only turn the old pixel off, if the number of counts it has now is 0.
-                if frame_counts[off_y][off_x] == 0:
-                    data_phase_processed.append(DataPoint(off_x, off_y, side=0, energy=-inf,
-                                                          start_time=data_processed[n].start_time, gradient_delay=GRADIENT_DELAY_PHASE))
-                    
-    #print(" ")
-    #print("Colour method is ",color_method)
-    #print("Energy method is ",energy_method)
-    #print(" ")
-    #numEvent = 0
-    #for event in data_processed:
-    #    numEvent += 1
-    #    print("Data item ",numEvent," details: x,y ",event.x,event.y," side ",event.side," energy details ",event.energy,event.energy_tick_rate,event.ticks,event.gradient_delay,event.start_time,event.end_time)
-    
-    if color_method == 'energy':  # Base the colouring on the energy of the detection.
+            data_processed += get_energy_tick_data(data_raw)
 
         # Now turn the DataPoints into events, accounting for the energy method.
         if energy_method == 'accumulate':
-            #print(color_gradient)
-            color_gradient = ([300],
-                              [0])
-            print(color_gradient)
-            events = get_energy_accum_events(data_processed, displays, color_gradient)
+            events += get_energy_accum_events(data_processed, displays, color_gradient)
         elif energy_method == 'tick':
-            events = get_energy_tick_events(data_processed, displays, color_gradient)
-
-    if mode == 'phase':
-        events_phase = get_energy_tick_events(data_phase_processed, displays, color_gradient)
-
-        events += events_phase
-
-
-    #print(" ")
-    #numEvent = 0
-    #for event in events:
-    #    numEvent += 1
-    #    print("Event ",numEvent)
-    #    print("x_values    ",event.x_values)
-    #    print("y_values    ",event.y_values)
-    #    print("colors      ",event.colors)
-    #    print("display_IDs ",event.display_IDs)
-    #    print("start_time  ",event.start_time)
-    #    print(" ")
+            events += get_energy_tick_events(data_processed, displays, color_gradient)
     
     # Make sure the events are in time order.
     events = sorted(events)
-    #print(" ")
-    #numEvent = 0
-    #for event in events:
-    #    numEvent += 1
-    #    print("Sorted Event ",numEvent)
-    #    print("x_values    ",event.x_values)
-    #    print("y_values    ",event.y_values)
-    #    print("colors      ",event.colors)
-    #    print("display_IDs ",event.display_IDs)
-    #    print("start_time  ",event.start_time)
-    #    print(" ")
 
     # All events at the moment are individual pixel updates.
     # Let's group multiple pixel updates together into a single event, IF they are very close together in time.
     events = group_events(events)
 
-    # Let's construct the pixel map for one display
-    rows, cols = (8, 8)
-
-    for ID in range(4):
-        # Create and initialise to zero
-        pixelmap = [[0 for i in range(cols)] for j in range(rows)]
-
-        for event in events:
-            #print("Display IDs",event.display_IDs)
-            #print("x",event.x_values)
-            #print("y",event.y_values)
-            for plot in range(len(event.x_values)):
-                if (event.display_IDs[plot]==ID):
-                    pixelmap[event.x_values[plot]][event.y_values[plot]]+=1
-
-        print(" ")
-        print("Pixel map for display ",ID)
-        for j in range(rows):
-            print(pixelmap[j])
-
-            #print(" ")
-    #numEvent = 0
-    #for event in events:
-    #    numEvent += 1
-    #    print("Grouped Event ",numEvent)
-    #    print("x_values    ",event.x_values)
-    #    print("y_values    ",event.y_values)
-    #    print("colors      ",event.colors)
-    #    print("display_IDs ",event.display_IDs)
-    #    print("start_time  ",event.start_time)
-    #    print(" ")
-
     return events
 
 
-def process_file(file_, mode=MODE_DEFAULT, normalise=False):
+def process_file(file_, normalise=False):
     assert isinstance(file_, str)
-    assert isinstance(mode, str)
     assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
     data = loadtxt(file_, delimiter=',')
@@ -423,7 +108,7 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
     assert all(y_i >= 0 for y_i in y), 'Data point with y pixel < 0.'
     #assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'  # TODO: include?
 
-    energy = [1.0 for e in energy]  # TODO: add mode for this.
+    energy = [1.0 for _ in energy]  # TODO: add mode for this.
 
     if normalise:
         minimum = min(time)
@@ -492,14 +177,10 @@ def get_energy_accum_data(data_raw):
 
     # We need to make the energy of the data point equal to itself plus the previous energy of the pixel.
     # If there are no hits of the pixel before data point, then its energy is left unchanged.
-    #min_e = 0
-    #max_e = 0
     for n, dA in enumerate(data_processed):  # d for data point.
 
         # We ignore the first data point as this will never need its energy updated.
         if n == 0:
-            #min_e = dA.energy
-            #max_e = dA.energy
             continue
 
         # Only bother look at data points before the currently considered one **in reverse**.
@@ -513,31 +194,19 @@ def get_energy_accum_data(data_raw):
 
                 # Don't want to add any energies, as we would be double counting.
                 break
-        #if dA.energy < min_e:
-        #    min_e = dA.energy
-        #if dA.energy > max_e:
-        #    max_e = dA.energy
-    #kit=False
-    #if kit:
-    #    for n, dA in enumerate(data_processed):
-    #        dA.energy -= min_e
-    #    max_e -= min_e
-    #    print(f"max energy = {max_e}")
+
     return data_processed
 
 
-def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY, phase_mode=False):
+def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gradient_delay=GRADIENT_DELAY):
     ''' Takes in the raw data, and returns the organised data points. This initially
         gets the number of ticks and thus the alight-time of the data point. It then
         also carefully checks if any of the data points overlap in time and thus need
-        to be merged.
-        If in phase_mode, the energy tick rate required is set to enforce a constant
-        number of ticks regardless the energy of the data point. '''
+        to be merged. '''
 
     data_processed = []
 
     for t, ID, x, y, s, e in data_raw:  # time, crystal_ID, x, y, side, energy.
-        energy_tick_rate = get_rate(e, num_ticks=PHASE_MODE_TICKS) if phase_mode else energy_tick_rate  # Number of ticks held constant if in phase_mode.
         num_ticks = get_num_ticks(e, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
         alight_time = get_quantity(num_ticks, gradient_delay)  # How long should this pixel be lit up for?
 
@@ -545,69 +214,37 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
 
     data_processed = sorted(data_processed)  # Sorted based on start_time.
 
-    if phase_mode:
+    # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
+    for n, dA in tqdm(enumerate(data_processed), desc="Processing tick data"):  # d for data point.
 
-        # We don't need to worry about overlapping data points when in phase mode as everything is shown sequentially.
-        # We just need to set the start times of the data points accordingly.
-        # Data: [A, B, C, D, E, F].
-        # The pairs of data would be (A, B), (C, D), (E, F).
-        # A should have start time of A.
-        # B should have start time of A.
-        # C should have start time of end time of A.
-        # D should have start time of C.
-        # E should have start time of end time of C.
-        # F should have start time of E.
-        # Etc...
+        # Only bother looking at data points ahead of the currently considered one.
+        for dB in data_processed[n+1:]:
+            # Data is sorted in time, so if event B starts after A has "ticked away" then no later events
+            # need to be checked
+            if dB.start_time > dA.end_time:
+                break
 
-        assert len(data_processed) % 2 == 0
+            # We're looking for data points that hit the same pixel and iB starts before the end of iA.
+            if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
 
-        for n in range(0, len(data_processed), 2):
+                # An event, dB, occurs within the time frame that dA is still alight.
 
-            # Don't need to update the start time of the initial data.
-            if n != 0:
-                time_diff = data_processed[n].start_time - data_processed[n-2].end_time
+                # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
+                # This includes remove the final background colour tick of iA, which iB will now deal with.
+                dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
 
-                data_processed[n].start_time -= time_diff
-                data_processed[n].end_time -= time_diff  # We do end times too for completeness.
+                # The initial iA event end time is now equal to the latter iB event start time.
+                dA.end_time = dB.start_time
 
-            time_diff = data_processed[n+1].start_time - data_processed[n].start_time
+                # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
+                dB.energy += dA.energy - dA.ticks * energy_tick_rate
 
-            data_processed[n+1].start_time -= time_diff
-            data_processed[n+1].end_time -= time_diff  # We do end times too for completeness.
+                # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
+                dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
+                dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
 
-    else:
-
-        # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for n, dA in tqdm(enumerate(data_processed), desc="Processing tick data"):  # d for data point.
-
-            # Only bother looking at data points ahead of the currently considered one.
-            for dB in data_processed[n+1:]:
-                # Data is sorted in time, so if event B starts after A has "ticked away" then no later events
-                # need to be checked
-                if (dB.start_time > dA.end_time):
-                    break
-                
-                # We're looking for data points that hit the same pixel and iB starts before the end of iA.
-                if (dA.side == dB.side) and (dA.x == dB.x) and (dA.y == dB.y):
-
-                    # An event, dB, occurs within the time frame that dA is still alight.
-
-                    # Therefore, we erase the ticks of the initial iA event that would occur after iB has started.
-                    # This includes remove the final background colour tick of iA, which iB will now deal with.
-                    dA.ticks -= get_num_ticks(dA.end_time-dB.start_time, gradient_delay)
-
-                    # The initial iA event end time is now equal to the latter iB event start time.
-                    dA.end_time = dB.start_time
-
-                    # The energy of the latter iB event will be itself plus |the energy of the initial iA event minus the amount it has decayed by|.
-                    dB.energy += dA.energy - dA.ticks * energy_tick_rate
-
-                    # Now re-compute the (greater) number of ticks and the (later) end time for the latter iB event.
-                    dB.ticks = get_num_ticks(dB.energy, energy_tick_rate)  # *** Number of ticks this pixel has is based on the energy. ***
-                    dB.end_time = dB.start_time + get_quantity(dB.ticks, gradient_delay)  # Start time + alight time.
-
-                    # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
-                    break
+                # If dA overlaps with a dC, this will be dealt with by dB, so may as well break here to save time.
+                break
 
     return data_processed
 
@@ -644,38 +281,33 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
         `gradient_delay` seconds later, 0 eV (blank) colour `gradient_delay` seconds later. '''
 
     events = []
+
     print("Total points ",len(data_points))
-    d = 0
+
     for data_point in tqdm(data_points, desc="Processing tick events"):
-        #if(d%4==0):
-        #    print(" ")
-        d += 1
         for tick in range(data_point.ticks+1):
-            #print("Tick ",tick)
             energy = data_point.energy - tick * data_point.energy_tick_rate
 
             color = COLOR_DEFAULT if energy <= 0.0 else get_color_from_gradient(energy, color_gradient,len(data_points))
-            #print("Colour is ",color)
 
             display_ID, mirror_ID = get_display_ID(displays, data_point.x, data_point.y, data_point.side)
 
-            #if (tick==0):
-            #    print("Global coord data ",data_point.x, data_point.y, data_point.side)
-            #print("Displays are ",display_ID,mirror_ID)
             # If this side or pixel don't map to a display, we ignore it
-            if (display_ID>=0):
+
+            if display_ID >= 0:
                 x = data_point.x % displays[display_ID].size  # Turns global x into local.
                 y = data_point.y % displays[display_ID].size  # Turns global y into local.
-                #if (tick==0):
-                #    print("Pixel data ",x,y, " on ",display_ID)
+
                 events.append(Event([x], [y], [color], [display_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
-            if (mirror_ID>=0):
+
+            if mirror_ID >= 0:
                 x = displays[mirror_ID].size - 1 - data_point.x % displays[mirror_ID].size  # Turns global x into local and *mirrors*
                 y = data_point.y % displays[mirror_ID].size  # Turns global y into local.
-                #if (tick==0):
-                #    print("Pixel data ",x,y, " on ",mirror_ID)
+
                 events.append(Event([x], [y], [color], [mirror_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
+
     return events
+
 
 def store_data(data, _file='example'):
     ''' Function to store preprocessed event data in a file for displaying later'''
@@ -699,6 +331,7 @@ def load_data(_file='example'):
     dbfile.close()
     print('Done')
     return data
+
 
 class DataPoint:
     def __init__(self, x, y, side=0, energy=0.0, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
@@ -758,4 +391,3 @@ class Event:
             s += f'({x},{y})  {color}  {self.start_time:6.2f}\n'
 
         return s[:-1]
-
