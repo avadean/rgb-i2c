@@ -98,7 +98,6 @@ def normalise_events(events):
 
     for event in events:
         event.start_time = factor * (event.start_time - minimum) / difference
-        event.end_time *= factor * (event.end_time - minimum) / difference
 
 
 def process_file(file_):
