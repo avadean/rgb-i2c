@@ -7,7 +7,7 @@ from display import clear_displays, get_displays, activate_channel
 from parameters import FRAME_RATE, EVENT_TIME_DIFFERENCE_TOLERANCE, WAIT_DISPLAY, \
                        MODE_DEFAULT, ENERGY_METHOD_DEFAULT, WAIT_WRITE
 from utility import wait_for_matrix_ready
-
+from data import storeData, loadData
 
 def get_bus():
     return SMBus(1)
@@ -136,11 +136,21 @@ def data_manager(data):
 
         first_pass = False
 
+def preprocess_data(file_=None, mode=MODE_DEFAULT,displays=None,
+        energy_method=ENERGY_METHOD_DEFAULT,layout=None,
+        normalise=True, mirror=False, out_file='example'):
+        
+    bus=None
+    #initialise(layout, bus, displays, force_displays, mirror)
+    time_start = time()
+    data = process_data(file_, displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    storeData(_file=out_file,data=data)
+    time_end = time()
+    print(f'Pre-processing complete in {time_end-time_start}s', )
 
 def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
         energy_method=ENERGY_METHOD_DEFAULT,
-        force_displays=False, normalise=True, mirror=False):
-    global g_bus
+        force_displays=False, normalise=True, mirror=False,data_file=''):
     global g_displays
 
     if file_ is not None:
@@ -156,8 +166,10 @@ def run(file_=None, layout=None, bus=None, displays=None, mode=MODE_DEFAULT,
     time_start = time()
 
     initialise(layout, bus, displays, force_displays, mirror)
-
-    data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    if data_file == '':
+        data = process_data(file_, g_displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    else:
+        data = loadData(data_file)
 
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')

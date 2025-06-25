@@ -1,6 +1,6 @@
 from copy import deepcopy
 from numpy import loadtxt, arctan2, inf, where, zeros
-
+from tqdm import tqdm
 from display import Display, get_display_ID
 from parameters import MODES, MODE_DEFAULT, \
                        PHASE_MODE_TICKS, \
@@ -432,52 +432,10 @@ def process_file(file_, mode=MODE_DEFAULT, normalise=False):
 
     energy = [1.0 for e in energy]  # TODO: add mode for this.
 
-    if mode == 'phase':
-        assert all(s in (0, 1) for s in side), 'Need only side 0 and 1 for phase mode.'
-
-        # Side 0 will show a diagram of phase data.
-        # Side 1 will show its data just as in mode=='normal'
-        # DataPoint 1: Absorption/scatter on detector 0 with x,y,energy.
-        # DataPoint 2: Absorption/scatter on detector 0 with x,y,energy.
-        # DataPoint 3: Absorption/scatter on detector 1 with x,y,energy.
-        # DataPoint 4: Absorption/scatter on detector 1 with x,y,energy.
-        # We split up this data into two sets - that to be displayed normally and the corresponding data to create the phase diagram.
-        # The phase data comes first and then the data to display normally.
-
-        time0, time1 = [], []
-        side0, side1 = [], []
-        x0, x1 = [], []
-        y0, y1 = [], []
-        energy0, energy1 = [], []
-
-        for n, s in enumerate(side):
-            if n % 4 in (0, 1):
-                assert s == 0, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
-
-                time0.append(time[n])
-                side0.append(side[n])
-                x0.append(x[n])
-                y0.append(y[n])
-                energy0.append(energy[n])
-
-            elif n % 4 in (2, 3):
-                assert s == 1, 'In phase mode, data should have sides 0,0,1,1,0,0,1,1,...'
-
-                time1.append(time[n])
-                side1.append(side[n])
-                x1.append(x[n])
-                y1.append(y[n])
-                energy1.append(energy[n])
-
-        time = time0 + time1
-        side = side0 + side1
-        x = x0 + x1
-        y = y0 + y1
-        energy = energy0 + energy1
-
     if normalise:
         minimum = min(time)
         difference = max(time) - minimum
+
         num_data_points = data.shape[0]
         factor = 5.0 * float(num_data_points) / 5000.0
 
@@ -627,7 +585,7 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
     else:
 
         # We need to make sure that any hits on pixels that are already lit up do not overwrite, but instead add, energy to the pixel.
-        for n, dA in enumerate(data_processed):  # d for data point.
+        for n, dA in tqdm(enumerate(data_processed), desc="Processing tick data"):  # d for data point.
 
             # Only bother looking at data points ahead of the currently considered one.
             for dB in data_processed[n+1:]:
@@ -695,7 +653,7 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
     events = []
     print("Total points ",len(data_points))
     d = 0
-    for data_point in data_points:
+    for data_point in tqdm(data_points, desc="Processing tick events"):
         #if(d%4==0):
         #    print(" ")
         d += 1
@@ -726,6 +684,28 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
                 events.append(Event([x], [y], [color], [mirror_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
     return events
 
+def storeData(data, _file='example'):
+    ''' Function to store preprocessed event data in a file for displaying later'''
+    import pickle
+
+    print(f"Dumping processed data to file: {_file}" )
+    # Dump data to file
+    dbfile = open(_file, 'ab')
+    # source, destination
+    pickle.dump(data, dbfile)
+    dbfile.close()
+    print('Done')
+    return
+
+def loadData(_file='example'):
+    ''' Function to load preprocessed event data from file for displaying.'''
+    import pickle
+    print(f"Loading processed data from file: {_file}" )
+    dbfile = open(_file, 'rb')
+    data = pickle.load(dbfile)
+    dbfile.close()
+    print('Done')
+    return data
 
 class DataPoint:
     def __init__(self, x, y, side=0, energy=0.0, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT,
