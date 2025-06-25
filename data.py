@@ -3,8 +3,8 @@ from time import time as get_time
 from tqdm import tqdm
 from display import Display, get_display_ID
 from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
-                       ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
-                       EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY
+    ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
+    EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY
 from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 
@@ -65,7 +65,7 @@ def process_data(file_,
             events += get_energy_accum_events(data_processed, displays, color_gradient)
         elif energy_method == 'tick':
             events += get_energy_tick_events(data_processed, displays, color_gradient)
-    
+
     # Make sure the events are in time order.
     events = sorted(events)
 
@@ -146,33 +146,23 @@ def group_events(events):
     n = 0  # Manual counter, so we can avoid already-processed events.
 
     while n < len(events):
-        event = events[n]
 
-        x_values = event.x_values
-        y_values = event.y_values
-        colors = event.colors
-        display_IDs = event.display_IDs
+        m = n
 
-        count = 0
+        while (m + 1) < len(events) and (events[m+1].start_time - events[n].start_time) < EVENT_TIME_DIFFERENCE_TOLERANCE:
+            m += 1
 
-        # Loop through events ahead of this.
-        for future_event in events[n+1:]:
+        x_values, y_values, colors, display_IDs = [], [], [], []
 
-            # If the future event start time is very close to this event, get its data.
-            if (future_event.start_time - event.start_time) < EVENT_TIME_DIFFERENCE_TOLERANCE:
-                x_values += future_event.x_values
-                y_values += future_event.y_values
-                colors += future_event.colors
-                display_IDs += future_event.display_IDs
+        for i in range(n,m+1):
+            x_values += events[i].x_values
+            y_values += events[i].y_values
+            colors += events[i].colors
+            display_IDs += events[i].display_IDs
 
-                count += 1  # Record how many events we have processed.
+        grouped_events.append(Event(x_values, y_values, colors, display_IDs, events[n].start_time))
 
-            else:
-                break  # We can stop looking as the events are ordered.
-
-        grouped_events.append(Event(x_values, y_values, colors, display_IDs, event.start_time))
-
-        n += count + 1  # `count` number of future events processed. +1 for `event` itself.
+        n = m + 1
 
     return grouped_events
 
