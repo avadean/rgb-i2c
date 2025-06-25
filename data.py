@@ -77,12 +77,13 @@ def process_data(file_,
     # ... final interesting piece of data has occured.
     events = [event for event in events if event.start_time < final_data_point_time]
 
-    if normalise:
-        normalise_events(events)
-
     # All events at the moment are individual pixel updates.
     # Let's group multiple pixel updates together into a single event, IF they are very close together in time.
     events = group_events(events)
+
+    # Normalise the timing data so that it shows a defined number of events per time.
+    if normalise:
+        normalise_events(events)
 
     return events
 
@@ -94,8 +95,8 @@ def normalise_events(events):
     minimum = min([event.start_time for event in events])
     difference = max([event.start_time for event in events]) - minimum
 
-    num_data_points = len(events)
-    factor = 5.0 * float(num_data_points) / 500.0
+    num_events = len(events)
+    factor = 5.0 * float(num_events) / 500.0
 
     for event in events:
         event.start_time = factor * (event.start_time - minimum) / difference
