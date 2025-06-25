@@ -48,7 +48,7 @@ def process_data(file_,
     assert color_method in COLOR_METHODS, f'{color_method} is an unknown colour method.'
     assert energy_method in ENERGY_METHODS, f'{energy_method} is an unknown energy method.'
 
-    data_raw = process_file(file_, normalise=normalise)  # The raw data from file.
+    data_raw = process_file(file_)  # The raw data from file.
     data_processed = []
     events = []
 
@@ -69,6 +69,16 @@ def process_data(file_,
     # Make sure the events are in time order.
     events = sorted(events)
 
+    final_data_point_time = data_processed[-1].start_time
+
+    # Get rid of any events that occur after the file Data Point.
+    # This means any pixels with huge counts and thus very long tick away time are just chopped off when the...
+    # ... final interesting piece of data has occured.
+    events = [event for event in events if event.start_time < final_data_point_time]
+
+    if normalise:
+        normalise_events(events)
+
     # All events at the moment are individual pixel updates.
     # Let's group multiple pixel updates together into a single event, IF they are very close together in time.
     events = group_events(events)
@@ -76,9 +86,23 @@ def process_data(file_,
     return events
 
 
-def process_file(file_, normalise=False):
+def normalise_events(events):
+    assert isinstance(events, list)
+    assert all(isinstance(e, Event) for e in events)
+
+    minimum = min([event.start_time for event in events])
+    difference = max([event.start_time for event in events]) - minimum
+
+    num_data_points = len(events)
+    factor = 5.0 * float(num_data_points) / 500.0
+
+    for event in events:
+        event.start_time = factor * (event.start_time - minimum) / difference
+        event.end_time *= factor * (event.end_time - minimum) / difference
+
+
+def process_file(file_):
     assert isinstance(file_, str)
-    assert isinstance(normalise, bool)  # Do we want to normalise the time data to have on avg. 100 data points per 5 sec?
 
     data = loadtxt(file_, delimiter=',')
 
@@ -109,15 +133,6 @@ def process_file(file_, normalise=False):
     #assert all(e >= 0.0 for e in energy), 'Data point with energy < 0.'  # TODO: include?
 
     energy = [1.0 for _ in energy]  # TODO: add mode for this.
-
-    if normalise:
-        minimum = min(time)
-        difference = max(time) - minimum
-
-        num_data_points = data.shape[0]
-        factor = 5.0 * float(num_data_points) / 5000.0
-
-        time = [factor * (t - minimum) / (difference) for t in time]
 
     return list(zip(time, ID, x, y, side, energy))  # Note: we have put side to the right of (x, y) rather than the left.
 
