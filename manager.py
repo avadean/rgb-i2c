@@ -146,11 +146,9 @@ def data_manager(data):
 
 def run(file_=None, layout=None, bus=None, displays=None,
         energy_method=ENERGY_METHOD_DEFAULT,
-        force_displays=False, normalise=True, mirror=False,data_file=''):
+        force_displays=False, normalise=True, mirror=False,
+        preprocessed_file=None):
     global g_displays
-
-    if file_ is not None:
-        assert isinstance(file_, str)
 
     if displays is not None:
         assert bus is not None, 'Need to supply bus with displays.'
@@ -163,10 +161,17 @@ def run(file_=None, layout=None, bus=None, displays=None,
 
     initialise(layout, bus, displays, mirror)
 
-    if data_file == '':
-        data = process_data(file_, g_displays, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    if preprocessed_file is not None:
+        assert isinstance(preprocessed_file, str)
+
+        if file_ is not None:
+            print(f'Both input and pre-processed file given. Using pre-processed file.')
+
+        data = load_data(preprocessed_file)
     else:
-        data = load_data(data_file)
+        assert isinstance(file_, str)
+
+        data = process_data(file_, g_displays, energy_method=energy_method, normalise=normalise, mirror=mirror)
 
     thread_display = Thread(target=display_manager, name='Display')
     thread_data = Thread(target=data_manager, args=(data,), name='Data')

@@ -1,4 +1,5 @@
 from numpy import loadtxt, inf
+from pickle import dump as pickle_dump, load as pickle_load
 from time import time as get_time
 from tqdm import tqdm
 from display import Display, get_display_ID
@@ -315,25 +316,22 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
 
 def store_data(data, _file='example'):
     ''' Function to store preprocessed event data in a file for displaying later'''
-    import pickle
 
     print(f"Dumping processed data to file: {_file}" )
     # Dump data to file
-    dbfile = open(_file, 'ab')
-    # source, destination
-    pickle.dump(data, dbfile)
-    dbfile.close()
+    with open(_file, 'ab') as dbfile:
+        pickle_dump(data, dbfile) # source, destination
     print('Done')
     return
 
 def load_data(_file='example'):
     ''' Function to load preprocessed event data from file for displaying.'''
-    import pickle
+
     print(f"Loading processed data from file: {_file}" )
-    dbfile = open(_file, 'rb')
-    data = pickle.load(dbfile)
-    dbfile.close()
+    with open(_file, 'rb') as dbfile:
+        data = pickle_load(dbfile)
     print('Done')
+
     return data
 
 
