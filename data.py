@@ -223,7 +223,9 @@ def get_energy_tick_data(data_raw, energy_tick_rate=ENERGY_TICK_RATE_DEFAULT, gr
     for n, dA in tqdm(enumerate(data_processed), desc="Processing tick data"):  # d for data point.
 
         # Only bother looking at data points ahead of the currently considered one.
-        for dB in data_processed[n+1:]:
+        for m in range(n+1, len(data_processed)):
+            dB = data_processed[m]
+
             # Data is sorted in time, so if event B starts after A has "ticked away" then no later events
             # need to be checked
             if dB.start_time > dA.end_time:
