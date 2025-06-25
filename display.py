@@ -230,11 +230,31 @@ def get_display_ID(displays, x, y, side):
             if display.mirror:
                 mirror_ID = display.ID
             else:
-                main_ID   = display.ID
+                main_ID = display.ID
 
     return main_ID, mirror_ID
 
-    raise ValueError(f'Could not find display to show pixel ({x}, {y}) on side {side}.')
+
+def set_global_orientation(bus, orientation=1):
+    assert isinstance(bus, SMBus)
+    assert isinstance(orientation, int)
+
+    addresses, channels = get_addresses(bus)
+
+    for address, channel in zip(addresses, channels):
+        activate_channel(bus, channel)
+
+        bus.write_byte_data(address, I2C_CMD_DISP_ROTATE, orientation)
+        sleep(WAIT_WRITE)
+
+
+def activate_channel(bus, channel):
+    assert isinstance(bus, SMBus)
+    assert isinstance(channel, int)
+    assert channel in I2C_MULTIPLEXER_CHANNEL_IDs
+
+    bus.write_byte(I2C_MULTIPLEXER_ID, channel)
+    sleep(WAIT_WRITE)
 
 
 class Display:
@@ -286,11 +306,17 @@ class Display:
     
         return hex(result[1]), hex(result[0])
 
-    def set_device_address(self, bus, new_address=DEFAULT_I2C_ADDR):
+    def set_device_address(self, bus, new_address=DEFAULT_I2C_ADDR, force=False):
         assert isinstance(bus, SMBus)
         assert isinstance(new_address, int)
+        assert isinstance(force, bool)
 
         assert DEVICE_NUM_MAX >= new_address >= DEVICE_NUM_MIN, f'Device address {new_address} outside of sensible range.'
+
+        current_addresses, _ = get_addresses(bus)
+
+        if new_address in current_addresses and not force:
+            raise ValueError(f'Device address {new_address} already exists. Use force to overwrite.')
 
         bus.write_byte_data(self.addr, I2C_CMD_SET_ADDR, new_address)
         sleep(WAIT_WRITE)
@@ -476,26 +502,3 @@ class Display:
 
     def switch_buffer(self):
         self.display_frame_A = not self.display_frame_A
-
-
-def set_global_orientation(bus, orientation=1):
-    assert isinstance(bus, SMBus)
-    assert isinstance(orientation, int)
-
-    addresses, channels = get_addresses(bus)
-
-    for address, channel in zip(addresses, channels):
-        activate_channel(bus, channel)
-        
-        bus.write_byte_data(address, I2C_CMD_DISP_ROTATE, orientation)
-        sleep(WAIT_WRITE)
-
-
-def activate_channel(bus, channel):
-    assert isinstance(bus, SMBus)
-    assert isinstance(channel, int)
-    assert channel in I2C_MULTIPLEXER_CHANNEL_IDs
-
-    bus.write_byte(I2C_MULTIPLEXER_ID, channel)
-    sleep(WAIT_WRITE)
-
