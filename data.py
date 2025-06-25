@@ -91,30 +91,7 @@ def process_data(file_,
 
         # Let's go and process the data_raw as normal, and then tie in the phase data after.
 
-    elif mode == 'scatter':
-
-        # In scatter mode, we require 2 sides to the layout, each of 2x2 displays.
-        displays_dict = {0: [(display.X, display.Y) for display in displays if display.side == 0],
-                         1: [(display.X, display.Y) for display in displays if display.side == 1]}
-
-        assert (0, 0) in displays_dict[0]
-        assert (0, 1) in displays_dict[0]
-        assert (1, 0) in displays_dict[0]
-        assert (1, 1) in displays_dict[0]
-        assert (0, 0) in displays_dict[1]
-        assert (0, 1) in displays_dict[1]
-        assert (1, 0) in displays_dict[1]
-        assert (1, 1) in displays_dict[1]
-
-        # The process_file function has already ordered the data for us.
-        # The first half of the data is for help with the phase diagram.
-        # The second half of the data is to be display on side 1 as it would in 'normal' mode.
-
-        data_phase = data_raw[:len(data_raw)//2]
-        data_raw = data_raw[len(data_raw)//2:]
-
-        # Let's go and process the data_raw as normal, and then tie in the phase data after.
-
+ 
     if color_method == 'energy':  # Base the colouring on the energy of the detection.
 
         # Collect the list of DataPoints, accounting for the energy method.
