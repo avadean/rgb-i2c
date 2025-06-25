@@ -100,6 +100,8 @@ GRADIENT_DELAY = 1  # How long is the default between colour changes of pixels?
 #EVENT_TIME_DIFFERENCE_TOLERANCE = 0.001  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 EVENT_TIME_DIFFERENCE_TOLERANCE = 1.0  # If two pixel light-ups are within this time frame, then they are updated at the same time.
 
+NUM_AVERAGE_EVENTS_PER_SECOND = 100
+
 EXAMPLE_DATA = [(1.00, 999, 0, 3, 3, 18.0), (2.75, 999, 0, 3, 3, 20.0)]
 
 LETTERS = list('ABCDEFGJKLMPQRTUVWY')  # Usable letters for arranging the displays. These have no awkward symmetries.

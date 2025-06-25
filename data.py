@@ -5,7 +5,7 @@ from tqdm import tqdm
 from display import Display, get_display_ID
 from parameters import COLOR_DEFAULT, COLOR_GRADIENT_DEFAULT, COLOR_METHODS, COLOR_METHOD_DEFAULT, \
     ENERGY_METHODS, ENERGY_METHOD_DEFAULT, ENERGY_TICK_RATE_DEFAULT, \
-    EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY
+    EVENT_TIME_DIFFERENCE_TOLERANCE, GRADIENT_DELAY, NUM_AVERAGE_EVENTS_PER_SECOND
 from utility import get_color_from_gradient, get_num_ticks, get_quantity
 
 
@@ -96,7 +96,7 @@ def normalise_events(events):
     difference = max([event.start_time for event in events]) - minimum
 
     num_events = len(events)
-    factor = 5.0 * float(num_events) / 500.0
+    factor = float(num_events) / float(NUM_AVERAGE_EVENTS_PER_SECOND)
 
     for event in events:
         event.start_time = factor * (event.start_time - minimum) / difference
