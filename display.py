@@ -55,7 +55,6 @@ def get_displays(bus, layout=None, mirror=False):
             layout = (len(addresses) // 2,)
         else:
             layout = (len(addresses),)
-    print("using addresses", addresses)
 
     # Let's now create the Display objects.
     print(f"stored addresses: {addresses}")
@@ -67,7 +66,6 @@ def get_displays(bus, layout=None, mirror=False):
     coordinates = [[divmod(n, int(ceil(sqrt(side_size)))) for n in range(side_size)] for side_size in layout]
 
     current_ID = 0
-    print(coordinates)
 
     for (side, YXs) in enumerate(coordinates):
         # First give IDs to the principle displays; for testing when using fewer displays ("sides"), can set side
@@ -148,12 +146,14 @@ def display_arranger(bus, displays):
 
     return string[:-1]
 
+
 def display_rainbow(bus,displays):
     c = ["red","orange","yellow","green","cyan","blue","purple","pink"] * len(displays)
     for i in range(len(displays)):
         print(f"{c[i]} = ",end="")
         displays[i].display_string(bus,displays[i].char,color=c[i],forever=True)
-        
+
+
 def display_rainbow_2(bus,display):
     for i in range(255):
         display.display_string(bus,"X",color=i,forever=True)
@@ -178,8 +178,6 @@ def switch_displays_from_chars(displays, char1, char2):
 
     switch_displays(display1, display2)
 
-def testing():
-    print("hello world")
 
 def rotate_display_from_char(bus,displays,char,num):
     assert isinstance(char, str)
@@ -229,12 +227,12 @@ def get_display_ID(displays, x, y, side):
 
     for display in displays:
         if (display.X == X) and (display.Y == Y) and (display.side == side):
-            if(display.mirror):
+            if display.mirror:
                 mirror_ID = display.ID
             else:
                 main_ID   = display.ID
 
-    return (main_ID,mirror_ID)
+    return main_ID, mirror_ID
 
     raise ValueError(f'Could not find display to show pixel ({x}, {y}) on side {side}.')
 

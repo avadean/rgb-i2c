@@ -45,7 +45,7 @@ if run_test:
         i+=1
 else:
     preprocess_data(file_=file_,  mode='normal',displays=displays,
-            energy_method='tick',layout=layout,
+            energy_method='tick',
             normalise=True, mirror=True, out_file=file2_)
 
 #run(file_=file_, layout=layout, \

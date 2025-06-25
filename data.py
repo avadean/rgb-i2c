@@ -1,5 +1,6 @@
 from copy import deepcopy
 from numpy import loadtxt, arctan2, inf, where, zeros
+from time import time
 from tqdm import tqdm
 from display import Display, get_display_ID
 from parameters import MODES, MODE_DEFAULT, \
@@ -10,6 +11,21 @@ from parameters import MODES, MODE_DEFAULT, \
                        PI
 from utility import get_color_from_gradient, get_num_ticks, get_quantity, get_rate, PhaseBin, get_phase_bin
 import math
+
+
+def preprocess_data(file_=None, mode=MODE_DEFAULT,displays=None,
+                    energy_method=ENERGY_METHOD_DEFAULT,
+                    normalise=True, mirror=False, out_file='example'):
+
+    time_start = time()
+
+    data = process_data(file_, displays, mode=mode, energy_method=energy_method, normalise=normalise, mirror=mirror)
+    store_data(_file=out_file,data=data)
+
+    time_end = time()
+
+    print(f'Pre-processing complete in {time_end-time_start}s', )
+
 
 def process_data(file_,
                  displays,
@@ -684,7 +700,7 @@ def get_energy_tick_events(data_points, displays, color_gradient=COLOR_GRADIENT_
                 events.append(Event([x], [y], [color], [mirror_ID], data_point.start_time+tick*data_point.gradient_delay))  # x, y, color, ID are lists.
     return events
 
-def storeData(data, _file='example'):
+def store_data(data, _file='example'):
     ''' Function to store preprocessed event data in a file for displaying later'''
     import pickle
 
@@ -697,7 +713,7 @@ def storeData(data, _file='example'):
     print('Done')
     return
 
-def loadData(_file='example'):
+def load_data(_file='example'):
     ''' Function to load preprocessed event data from file for displaying.'''
     import pickle
     print(f"Loading processed data from file: {_file}" )
